@@ -14,7 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -162,8 +162,9 @@ func setup(t *testing.T) *athenaHarness {
 
 func (a *athenaHarness) setupTable() {
 	// tables cannot start with numbers or contain dashes
-	id, _ := uuid.NewV4()
+	id := uuid.New()
 	a.table = "t_" + strings.Replace(id.String(), "-", "_", -1)
+	a.mustExec(`CREATE DATABASE IF NOT EXISTS %s;`, AthenaDatabase)
 	a.mustExec(`CREATE EXTERNAL TABLE %[1]s (
 	nullValue string,
 	smallintType smallint,

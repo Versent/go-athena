@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/athena"
+	"github.com/aws/aws-sdk-go/service/athena/athenaiface"
 )
 
 var (
@@ -21,7 +22,8 @@ var (
 
 // Driver is a sql.Driver. It's intended for db/sql.Open().
 type Driver struct {
-	cfg *Config
+	cfg    *Config
+	athena athenaiface.AthenaAPI
 }
 
 // NewDriver allows you to register your own driver with `sql.Register`.
@@ -29,8 +31,8 @@ type Driver struct {
 // https://github.com/segmentio/go-athena/pull/3
 //
 // Generally, sql.Open() or athena.Open() should suffice.
-func NewDriver(cfg *Config) *Driver {
-	return &Driver{cfg}
+func NewDriver(cfg *Config, client athenaiface.AthenaAPI) *Driver {
+	return &Driver{cfg, client}
 }
 
 func init() {
@@ -75,8 +77,12 @@ func (d *Driver) Open(connStr string) (driver.Conn, error) {
 		cfg.PollFrequency = 5 * time.Second
 	}
 
+	if d.athena == nil {
+		d.athena = athena.New(cfg.Session)
+	}
+
 	return &conn{
-		athena:         athena.New(cfg.Session),
+		athena:         d.athena,
 		db:             cfg.Database,
 		OutputLocation: cfg.OutputLocation,
 		pollFrequency:  cfg.PollFrequency,
@@ -106,9 +112,18 @@ func Open(cfg Config) (*sql.DB, error) {
 	name := fmt.Sprintf("athena-%d", openFromSessionCount)
 	openFromSessionMutex.Unlock()
 
-	sql.Register(name, &Driver{&cfg})
+	sql.Register(name, NewDriver(&cfg, nil))
 	return sql.Open(name, "")
 }
+
+// func New(athena athenaiface.AthenaAPI, cfg Config) (driver.Conn, error) {
+// 	return &conn{
+// 		athena:         athena,
+// 		db:             cfg.Database,
+// 		OutputLocation: cfg.OutputLocation,
+// 		pollFrequency:  cfg.PollFrequency,
+// 	}, nil
+// }
 
 // Config is the input to Open().
 type Config struct {
